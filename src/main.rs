@@ -4,7 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::fs::File;
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 use tokio::{io, try_join};
@@ -23,7 +23,7 @@ enum Cli {
         #[clap(long, default_value_t = 5)]
         iterations: i32,
     },
-    EchoServer {
+    RemoteServer {
         #[clap(long, default_value_t = 1144)]
         port: u16,
     },
@@ -42,8 +42,8 @@ async fn main() {
         } => {
             benchmark(files, transcode_seconds, port, ip, iterations).await;
         }
-        Cli::EchoServer { port } => {
-            echo_server(port).await;
+        Cli::RemoteServer { port } => {
+            remote_server(port).await;
         }
     }
 }
@@ -75,20 +75,20 @@ async fn benchmark(
     }
 }
 
-async fn echo_server(port: u16) {
+async fn remote_server(port: u16) {
     let server = TcpListener::bind(("0.0.0.0", port))
         .await
         .expect("failed to bind");
+    println!("Listening on {}", port);
 
     loop {
         let (connection, address) = server.accept().await.expect("failed to accept connection");
         println!("Got connection from {}", address);
 
         tokio::spawn(async move {
-            let (mut reader, mut writer) = connection.into_split();
-            io::copy(&mut reader, &mut writer)
-                .await
-                .expect("failed to echo bytes");
+            let (reader, mut writer) = connection.into_split();
+            let hash = hash(reader).await;
+            writer.write_u8(hash).await.expect("failed to write hash");
             println!("Finished connection from {}", address);
         });
     }
@@ -156,20 +156,15 @@ async fn transfer(file_path: &str, address: SocketAddr) -> u8 {
         .await
         .expect("failed to connect");
 
-    let (reader, mut writer) = connection.into_split();
+    let (mut reader, mut writer) = connection.into_split();
 
     let mut file = File::open(file_path).await.expect("failed to open file");
-    let copy_future = tokio::spawn(async move {
-        io::copy(&mut file, &mut writer)
-            .await
-            .expect("failed to send file");
-    });
+    io::copy(&mut file, &mut writer)
+        .await
+        .expect("failed to send file");
+    drop(writer);
 
-    let hash_future = tokio::spawn(async move { hash(reader).await });
-
-    let (_, hash) = try_join!(copy_future, hash_future).expect("failed to transfer");
-
-    hash
+    reader.read_u8().await.expect("failed to read file")
 }
 
 async fn hash(mut reader: impl AsyncRead + Unpin) -> u8 {
