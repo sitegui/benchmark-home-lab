@@ -55,11 +55,12 @@ Input #0, avi, from 'data/large.avi':
   Stream #0:1: Audio: mp3 (U[0][0][0] / 0x0055), 48000 Hz, stereo, fltp, 128 kb/s
 ```
 
-| Action                | Raspberry Pi 4 | Dell Inspiron 75650 | ? |
-|-----------------------|----------------|---------------------|---|
-| Read 10MiB            | 0.2 ± 0.0      |                     |   |
-| Read 1GiB             | 24.4 ± 0.1     |                     |   |
-| Transcode 30s 10MiB   | 32.1 ± 2.5     |                     |   |
-| Transcode 30s 1GiB    | 8.6 ± 0.2      |                     |   |
-| Transfer in LAN 10MiB | 2.7 ± 0.2      |                     |   |
-| Transfer in LAN 1GiB  | 288.9 ± 2.0 s  |                     |   |
+| Action                | Raspberry Pi 4 | Dell Inspiron 75650       | AMD Ryzen™ 7 2700X |
+|-----------------------|----------------|---------------------------|--------------------|
+| Read 10MiB            | 0.3 ± 0.2      | 0.1 ± 0.0                 | 0.1 ± 0.0          |
+| Read 1GiB             | 24.4 ± 0.7     | 9.6 ± 0.3                 | 19.4 ± 0.5         |
+| Transcode 30s 10MiB   | 30.0 ± 0.4     | 9.1 ± 0.7                 | 2.5 ± 0.0          |
+| Transcode 30s 1GiB    | 8.3 ± 0.1      | 2.1 ± 0.1                 | 1.5 ± 0.0          |
+| Transfer in LAN 10MiB | 1.6 ± 0.1      | 2.1 ± 0.6                 | 7.5 ± 1.1          |
+| Transfer in LAN 1GiB  | 173.8 ± 4.2    | 183.2 ± 1.8               | -                  |
+
