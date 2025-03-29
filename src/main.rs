@@ -13,13 +13,13 @@ use tokio::{io, try_join};
 enum Cli {
     Benchmark {
         #[clap(long)]
-        file: String,
+        files: Vec<String>,
         #[clap(long, default_value_t = 30.0)]
         transcode_seconds: f64,
         #[clap(long, default_value_t = 1144)]
-        echo_port: u16,
+        port: u16,
         #[clap(long)]
-        remote_ip: IpAddr,
+        ip: IpAddr,
         #[clap(long, default_value_t = 5)]
         iterations: i32,
     },
@@ -34,13 +34,13 @@ async fn main() {
     let cli = Cli::parse();
     match cli {
         Cli::Benchmark {
-            file,
+            files,
             transcode_seconds,
-            echo_port,
-            remote_ip,
+            port,
+            ip,
             iterations,
         } => {
-            benchmark(file, transcode_seconds, echo_port, remote_ip, iterations).await;
+            benchmark(files, transcode_seconds, port, ip, iterations).await;
         }
         Cli::EchoServer { port } => {
             echo_server(port).await;
@@ -49,23 +49,30 @@ async fn main() {
 }
 
 async fn benchmark(
-    file_path: String,
+    file_paths: Vec<String>,
     transcode_seconds: f64,
-    echo_port: u16,
-    remote_ip: IpAddr,
+    port: u16,
+    ip: IpAddr,
     iterations: i32,
 ) {
-    time("Read file", iterations, || read(&file_path)).await;
+    let transcode_duration = Duration::from_secs_f64(transcode_seconds);
+    let transfer_address = SocketAddr::new(ip, port);
 
-    time("Transcoded file", iterations, || {
-        transcode(&file_path, Duration::from_secs_f64(transcode_seconds))
-    })
-    .await;
+    for file_path in file_paths {
+        println!("Benchmark with {}", file_path);
 
-    time("Transferred data in LAN", iterations, || {
-        transfer(&file_path, SocketAddr::new(remote_ip, echo_port))
-    })
-    .await;
+        time("Read file", iterations, || read(&file_path)).await;
+
+        time("Transcoded file", iterations, || {
+            transcode(&file_path, transcode_duration)
+        })
+        .await;
+
+        time("Transferred data in LAN", iterations, || {
+            transfer(&file_path, transfer_address)
+        })
+        .await;
+    }
 }
 
 async fn echo_server(port: u16) {
