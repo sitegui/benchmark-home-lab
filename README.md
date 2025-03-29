@@ -15,7 +15,7 @@ git clone https://github.com/sitegui/benchmark-home-lab.git
 cd benchmark-home-lab
 cargo build --release
 hostname --all-ip-addresses | cut -d' ' -f1
-./target/release/benchmark-home-lab echo-server
+./target/release/benchmark-home-lab remote-server
 ```
 
 In each benchmark target:
