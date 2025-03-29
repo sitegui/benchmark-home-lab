@@ -20,6 +20,8 @@ enum Cli {
         echo_port: u16,
         #[clap(long)]
         remote_ip: IpAddr,
+        #[clap(long, default_value_t = 5)]
+        iterations: i32,
     },
     EchoServer {
         #[clap(long, default_value_t = 1144)]
@@ -36,8 +38,9 @@ async fn main() {
             transcode_seconds,
             echo_port,
             remote_ip,
+            iterations,
         } => {
-            benchmark(file, transcode_seconds, echo_port, remote_ip).await;
+            benchmark(file, transcode_seconds, echo_port, remote_ip, iterations).await;
         }
         Cli::EchoServer { port } => {
             echo_server(port).await;
@@ -45,29 +48,32 @@ async fn main() {
     }
 }
 
-async fn benchmark(file_path: String, transcode_seconds: f64, echo_port: u16, remote_ip: IpAddr) {
-    time("Read file", read(&file_path)).await;
-    time("Read file again", read(&file_path)).await;
+async fn benchmark(
+    file_path: String,
+    transcode_seconds: f64,
+    echo_port: u16,
+    remote_ip: IpAddr,
+    iterations: i32,
+) {
+    time("Read file", iterations, || read(&file_path)).await;
+    time("Read file again", iterations, || read(&file_path)).await;
 
-    time(
-        "Transcoded file",
-        transcode(&file_path, Duration::from_secs_f64(transcode_seconds)),
-    )
+    time("Transcoded file", iterations, || {
+        transcode(&file_path, Duration::from_secs_f64(transcode_seconds))
+    })
     .await;
 
-    time(
-        "Transferred data locally",
+    time("Transferred data locally", iterations, || {
         transfer(
             &file_path,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), echo_port),
-        ),
-    )
+        )
+    })
     .await;
 
-    time(
-        "Transferred data in LAN",
-        transfer(&file_path, SocketAddr::new(remote_ip, echo_port)),
-    )
+    time("Transferred data in LAN", iterations, || {
+        transfer(&file_path, SocketAddr::new(remote_ip, echo_port))
+    })
     .await;
 }
 
@@ -184,18 +190,34 @@ async fn hash(mut reader: impl AsyncRead + Unpin) -> u8 {
     hash
 }
 
-async fn time<F, O>(name: &str, f: F)
+async fn time<C, F, O>(name: &str, iterations: i32, f: C)
 where
+    C: Fn() -> F,
     F: Future<Output = O>,
     O: Debug,
 {
-    let start = Instant::now();
-    let t = f.await;
+    let mut samples = vec![];
+    let mut output = None;
+    for _ in 0..iterations {
+        let start = Instant::now();
+        output = Some(f().await);
+        samples.push(start.elapsed().as_secs_f64());
+    }
+
+    let n = samples.len() as f64;
+    let avg = samples.iter().sum::<f64>() / n;
+    let variance = samples
+        .iter()
+        .map(|sample| (sample - avg).powi(2))
+        .sum::<f64>()
+        / (n - 1.0);
+    let std = variance.sqrt();
 
     println!(
-        "{} in {:.1} s (got {:?})",
+        "{} in {:.1} ± {:.1} s (got {:?})",
         name,
-        start.elapsed().as_secs_f64(),
-        t
+        avg,
+        std,
+        output.expect("at least one iteration")
     );
 }
