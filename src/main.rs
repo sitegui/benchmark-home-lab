@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::fmt::Debug;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::fs::File;
@@ -56,18 +56,9 @@ async fn benchmark(
     iterations: i32,
 ) {
     time("Read file", iterations, || read(&file_path)).await;
-    time("Read file again", iterations, || read(&file_path)).await;
 
     time("Transcoded file", iterations, || {
         transcode(&file_path, Duration::from_secs_f64(transcode_seconds))
-    })
-    .await;
-
-    time("Transferred data locally", iterations, || {
-        transfer(
-            &file_path,
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), echo_port),
-        )
     })
     .await;
 
